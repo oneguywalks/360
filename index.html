@@ -69,19 +69,20 @@
       padding: 5px 0;
       font-size: 14px;
     }
-    /* Viewer container – now fills the full viewport height and uses flex for centering */
+    /* Viewer container – fills the full viewport and uses flex to center content */
     #viewer-container {
       display: none;
       background: black;
       width: 100vw;
-      height: 100vh;  /* Changed from 80vh to 100vh */
+      height: 100vh; /* Fills the entire viewport */
       position: relative;
       overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
+      pointer-events: none; /* Disabled by default when hidden */
     }
-    /* Fullscreen mode for viewer container remains the same */
+    /* Fullscreen mode for viewer container */
     #viewer-container:fullscreen,
     #viewer-container:-webkit-full-screen {
       width: 100vw;
@@ -177,7 +178,7 @@
     let cameraHolder;
     let fovMin = 30, fovMax = 100; // Limits for zoom
 
-    // Variables for mouse control and inertia
+    // Variables for mouse/touch control and inertia
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
     let inertia = { pitch: 0, yaw: 0 };
@@ -233,7 +234,9 @@
       currentIndex = index;
       // Hide the home screen and show the viewer container as a flex container.
       document.getElementById('home-screen').style.display = 'none';
-      document.getElementById('viewer-container').style.display = 'flex';
+      let viewerContainer = document.getElementById('viewer-container');
+      viewerContainer.style.display = 'flex';
+      viewerContainer.style.pointerEvents = 'auto';
       // Reset body background to black.
       document.body.style.background = 'black';
       // Initialize or load the viewer.
@@ -248,12 +251,13 @@
 
     // Return to the home screen (gallery view) and exit fullscreen if active.
     function goToHomeScreen() {
-      // Exit fullscreen if active.
       if (document.fullscreenElement || document.webkitFullscreenElement) {
         (document.exitFullscreen && document.exitFullscreen()) ||
         (document.webkitExitFullscreen && document.webkitExitFullscreen());
       }
-      document.getElementById('viewer-container').style.display = 'none';
+      let viewerContainer = document.getElementById('viewer-container');
+      viewerContainer.style.display = 'none';
+      viewerContainer.style.pointerEvents = 'none';
       document.getElementById('home-screen').style.display = 'grid';
       document.body.style.background = 'white';
     }
@@ -284,9 +288,16 @@
 
       animate();
 
+      // Mouse events.
       document.addEventListener("mousedown", onMouseDown);
       document.addEventListener("mouseup", onMouseUp);
       document.addEventListener("mousemove", onMouseMove);
+
+      // Touch events for mobile.
+      document.addEventListener("touchstart", onTouchStart, {passive: false});
+      document.addEventListener("touchmove", onTouchMove, {passive: false});
+      document.addEventListener("touchend", onTouchEnd, {passive: false});
+
       window.addEventListener("resize", onWindowResize);
       document.addEventListener("wheel", onMouseWheel);
     }
@@ -327,6 +338,38 @@
         camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
         previousMousePosition = { x: event.clientX, y: event.clientY };
       }
+    }
+
+    // Touch event handlers.
+    function onTouchStart(event) {
+      // Let button touches go through.
+      if (event.target.tagName === "BUTTON") return;
+      event.preventDefault();
+      isDragging = true;
+      let touch = event.touches[0];
+      previousMousePosition = { x: touch.clientX, y: touch.clientY };
+    }
+    function onTouchMove(event) {
+      // Let button touches go through.
+      if (event.target.tagName === "BUTTON") return;
+      event.preventDefault();
+      if (isDragging) {
+        let touch = event.touches[0];
+        const deltaMove = {
+          x: touch.clientX - previousMousePosition.x,
+          y: touch.clientY - previousMousePosition.y
+        };
+        const sensitivity = 0.005;
+        cameraHolder.rotation.y -= deltaMove.x * sensitivity;
+        camera.rotation.x -= deltaMove.y * sensitivity;
+        inertia.pitch = deltaMove.y * sensitivity;
+        inertia.yaw   = deltaMove.x * sensitivity;
+        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+        previousMousePosition = { x: touch.clientX, y: touch.clientY };
+      }
+    }
+    function onTouchEnd(event) {
+      isDragging = false;
     }
 
     // Resize handler.
