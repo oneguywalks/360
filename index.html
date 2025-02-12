@@ -24,7 +24,7 @@
       display: grid;
       grid-template-rows: auto 1fr;
       position: relative;
-      z-index: 10; /* ensure home screen is on top when active */
+      z-index: 10; /* Ensure home screen is on top when active */
     }
     /* Title at the top using Roboto Condensed Bold */
     #home-title {
@@ -71,7 +71,7 @@
       padding: 5px 0;
       font-size: 14px;
     }
-    /* Viewer container – fills the viewport and centers its content */
+    /* Viewer container – fills the full viewport and centers its content */
     #viewer-container {
       display: none;
       background: black;
@@ -84,16 +84,12 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      pointer-events: none; /* disabled when hidden */
-      visibility: hidden;
-      z-index: -9999; /* behind home screen when hidden */
     }
     /* Fullscreen mode for viewer container */
     #viewer-container:fullscreen,
     #viewer-container:-webkit-full-screen {
       width: 100vw;
       height: 100vh;
-      display: flex;
       justify-content: center;
       align-items: center;
     }
@@ -169,7 +165,7 @@
     <div class="controls">
       <!-- Fullscreen button -->
       <button onclick="toggleFullScreen()" title="Toggle Fullscreen">⛶</button>
-      <!-- Back to home button -->
+      <!-- Back to home button: Reload the page -->
       <button onclick="goToHomeScreen()" title="Back to Gallery">&#8592;</button>
     </div>
     <!-- Navigation arrow buttons -->
@@ -194,7 +190,7 @@
     let currentIndex = 0;
     let viewerInitialized = false;
 
-    // Load images JSON and then build the home screen.
+    // Load images JSON and build the home screen.
     function loadImages() {
       fetch('images.json')
         .then(response => {
@@ -213,18 +209,16 @@
     // Create thumbnail tiles on the home screen.
     function createHomeScreen() {
       const grid = document.getElementById('thumbnail-grid');
-      grid.innerHTML = ''; // Clear any existing content.
+      grid.innerHTML = '';
       images.forEach((imgData, index) => {
         const tile = document.createElement('div');
         tile.className = 'thumbnail';
         tile.onclick = () => startViewer(index);
 
-        // Create an image element for the thumbnail.
         const imgEl = document.createElement('img');
         imgEl.src = imgData.src;
         imgEl.alt = imgData.label;
 
-        // Create a label overlay.
         const labelEl = document.createElement('div');
         labelEl.className = 'label';
         labelEl.innerText = imgData.label;
@@ -238,17 +232,10 @@
     // Start the viewer with the selected image.
     function startViewer(index) {
       currentIndex = index;
-      // Hide the home screen.
       document.getElementById('home-screen').style.display = 'none';
-      // Show the viewer container and bring it to the front.
       let viewerContainer = document.getElementById('viewer-container');
       viewerContainer.style.display = 'flex';
-      viewerContainer.style.pointerEvents = 'auto';
-      viewerContainer.style.visibility = 'visible';
-      viewerContainer.style.zIndex = '0';
-      // Set background to black.
       document.body.style.background = 'black';
-      // Initialize or load the viewer.
       if (!viewerInitialized) {
         initViewer();
         viewerInitialized = true;
@@ -258,19 +245,9 @@
       updateCaption();
     }
 
-    // Return to the home screen and exit fullscreen if active.
+    // Return to the home screen by reloading the page.
     function goToHomeScreen() {
-      if (document.fullscreenElement || document.webkitFullscreenElement) {
-        (document.exitFullscreen && document.exitFullscreen()) ||
-        (document.webkitExitFullscreen && document.webkitExitFullscreen());
-      }
-      let viewerContainer = document.getElementById('viewer-container');
-      viewerContainer.style.display = 'none';
-      viewerContainer.style.pointerEvents = 'none';
-      viewerContainer.style.visibility = 'hidden';
-      viewerContainer.style.zIndex = '-9999';
-      document.getElementById('home-screen').style.display = 'grid';
-      document.body.style.background = 'white';
+      window.location.reload();
     }
 
     // Initialize Three.js scene, camera, and renderer.
@@ -289,7 +266,7 @@
 
       textureLoader = new THREE.TextureLoader();
       material = new THREE.MeshBasicMaterial({ 
-        map: textureLoader.load(images[currentIndex].src) 
+        map: textureLoader.load(images[currentIndex].src)
       });
 
       let geometry = new THREE.SphereGeometry(500, 60, 40);
@@ -320,8 +297,8 @@
         camera.rotation.x -= inertia.pitch;
         cameraHolder.rotation.y -= inertia.yaw;
         inertia.pitch *= 0.95;
-        inertia.yaw   *= 0.95;
-        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+        inertia.yaw *= 0.95;
+        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
       }
       renderer.render(scene, camera);
     }
@@ -345,8 +322,8 @@
         cameraHolder.rotation.y -= deltaMove.x * sensitivity;
         camera.rotation.x -= deltaMove.y * sensitivity;
         inertia.pitch = deltaMove.y * sensitivity;
-        inertia.yaw   = deltaMove.x * sensitivity;
-        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+        inertia.yaw = deltaMove.x * sensitivity;
+        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
         previousMousePosition = { x: event.clientX, y: event.clientY };
       }
     }
@@ -377,8 +354,8 @@
         cameraHolder.rotation.y -= deltaMove.x * sensitivity;
         camera.rotation.x -= deltaMove.y * sensitivity;
         inertia.pitch = deltaMove.y * sensitivity;
-        inertia.yaw   = deltaMove.x * sensitivity;
-        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+        inertia.yaw = deltaMove.x * sensitivity;
+        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
         previousMousePosition = { x: touch.clientX, y: touch.clientY };
       }
     }
@@ -412,7 +389,7 @@
 
     // Load current image.
     function loadCurrentImage() {
-      textureLoader.load(images[currentIndex].src, function (newTexture) {
+      textureLoader.load(images[currentIndex].src, function(newTexture) {
         material.map = newTexture;
         material.needsUpdate = true;
       });
