@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>360 Viewer Home & Viewer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    /* Base styles */
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    /* Home Screen Styles */
+    #home-screen {
+      background: white;
+      color: #333;
+      height: 100vh;
+      padding: 20px;
+      box-sizing: border-box;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    /* Title at the top */
+    #home-title {
+      text-align: center;
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+    /* Grid container for thumbnails */
+    #thumbnail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      overflow-y: auto;
+    }
+    /* Thumbnail tiles (square with clipping) */
+    .thumbnail {
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      border: 2px solid #ccc;
+      /* Ensure the tile is square */
+      aspect-ratio: 1 / 1;
+      background: #eee;
+    }
+    .thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s;
+    }
+    .thumbnail:hover img {
+      transform: scale(1.05);
+    }
+    .thumbnail .label {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      text-align: center;
+      padding: 5px 0;
+      font-size: 14px;
+    }
+    /* Viewer container – initially hidden */
+    #viewer-container {
+      display: none;
+      background: black;
+      width: 100vw;
+      height: 80vh;
+      position: relative;
+      overflow: hidden;
+    }
+    /* When in full-screen mode, expand container to full viewport and center its content */
+    #viewer-container:fullscreen,
+    #viewer-container:-webkit-full-screen {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    /* Controls for the viewer */
+    .controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 2;
+    }
+    .controls button {
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 20px;
+    }
+    .controls button:hover {
+      background: rgba(0, 0, 0, 0.9);
+    }
+    .arrow-button {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.5);
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 2;
+    }
+    .arrow-button:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+    #prevBtn { left: 10px; }
+    #nextBtn { right: 10px; }
+    /* Caption styling – near the bottom of the viewer */
+    #caption {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 8px 12px;
+      font-size: 18px;
+      z-index: 2;
+      border-radius: 4px;
+    }
+    #viewer-container:fullscreen #caption,
+    #viewer-container:-webkit-full-screen #caption {
+      bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Home Screen -->
+  <div id="home-screen">
+    <div id="home-title">360° Image Gallery</div>
+    <div id="thumbnail-grid"></div>
+  </div>
+
+  <!-- 360 Viewer Container -->
+  <div id="viewer-container">
+    <!-- Fullscreen control button -->
+    <div class="controls">
+      <button onclick="toggleFullScreen()" title="Toggle Fullscreen">⛶</button>
+    </div>
+    <!-- Navigation arrow buttons -->
+    <button id="prevBtn" class="arrow-button" onclick="prevImage()">&#9664;</button>
+    <button id="nextBtn" class="arrow-button" onclick="nextImage()">&#9654;</button>
+    <!-- Caption for the current image -->
+    <div id="caption"></div>
+  </div>
+  
+  <script>
+    let scene, camera, renderer, sphere, textureLoader, material;
+    let cameraHolder;
+    let fovMin = 30, fovMax = 100; // Limits for zoom
+
+    // Variables for mouse control and inertia
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    let inertia = { pitch: 0, yaw: 0 };
+
+    // Global image data and viewer index
+    let images = [];
+    let currentIndex = 0;
+    let viewerInitialized = false;
+
+    // Load images JSON and then build the home screen.
+    function loadImages() {
+      fetch('images.json')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          images = data;
+          createHomeScreen();
+        })
+        .catch(error => console.error('Error loading images JSON:', error));
+    }
+
+    // Create thumbnail tiles on the home screen.
+    function createHomeScreen() {
+      const grid = document.getElementById('thumbnail-grid');
+      grid.innerHTML = ''; // Clear any existing content.
+      images.forEach((imgData, index) => {
+        const tile = document.createElement('div');
+        tile.className = 'thumbnail';
+        tile.onclick = () => startViewer(index);
+
+        // Create an image element for the thumbnail.
+        const imgEl = document.createElement('img');
+        // Optionally, you might use a separate thumbnail image.
+        imgEl.src = imgData.src;
+        imgEl.alt = imgData.label;
+
+        // Create a label overlay.
+        const labelEl = document.createElement('div');
+        labelEl.className = 'label';
+        labelEl.innerText = imgData.label;
+
+        tile.appendChild(imgEl);
+        tile.appendChild(labelEl);
+        grid.appendChild(tile);
+      });
+    }
+
+    // Start the viewer with the selected image.
+    function startViewer(index) {
+      currentIndex = index;
+      // Hide the home screen and show the viewer container.
+      document.getElementById('home-screen').style.display = 'none';
+      document.getElementById('viewer-container').style.display = 'block';
+      // Reset body background to black.
+      document.body.style.background = 'black';
+      // If the viewer has not been initialized yet, do so.
+      if (!viewerInitialized) {
+        initViewer();
+        viewerInitialized = true;
+      } else {
+        // If already initialized, just load the chosen image.
+        loadCurrentImage();
+      }
+      updateCaption();
+    }
+
+    // Initialize Three.js scene, camera, and renderer.
+    function initViewer() {
+      scene = new THREE.Scene();
+
+      // Create a holder for the camera (for yaw rotation)
+      cameraHolder = new THREE.Object3D();
+      scene.add(cameraHolder);
+
+      // Create the camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / (window.innerHeight * 0.8), 0.1, 1000);
+      camera.position.set(0, 0, 0);
+      cameraHolder.add(camera);
+
+      // Create the renderer and append its canvas to the viewer container.
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight * 0.8);
+      document.getElementById("viewer-container").appendChild(renderer.domElement);
+
+      textureLoader = new THREE.TextureLoader();
+      // Create the sphere material using the currently selected image.
+      material = new THREE.MeshBasicMaterial({ 
+        map: textureLoader.load(images[currentIndex].src) 
+      });
+
+      // Create the sphere geometry and flip it inside-out.
+      let geometry = new THREE.SphereGeometry(500, 60, 40);
+      geometry.scale(-1, 1, 1);
+      sphere = new THREE.Mesh(geometry, material);
+      scene.add(sphere);
+
+      animate();
+
+      // Add mouse event listeners for navigation.
+      document.addEventListener("mousedown", onMouseDown);
+      document.addEventListener("mouseup", onMouseUp);
+      document.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("resize", onWindowResize);
+      document.addEventListener("wheel", onMouseWheel);
+    }
+
+    // Animation loop for the viewer.
+    function animate() {
+      requestAnimationFrame(animate);
+      if (!isDragging) {
+        camera.rotation.x -= inertia.pitch;
+        cameraHolder.rotation.y -= inertia.yaw;
+        inertia.pitch *= 0.95;
+        inertia.yaw   *= 0.95;
+        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+      }
+      renderer.render(scene, camera);
+    }
+
+    // Mouse event handlers for panning.
+    function onMouseDown(event) {
+      isDragging = true;
+      inertia = { pitch: 0, yaw: 0 };
+      previousMousePosition = { x: event.clientX, y: event.clientY };
+    }
+    function onMouseUp() {
+      isDragging = false;
+    }
+    function onMouseMove(event) {
+      if (isDragging) {
+        const deltaMove = {
+          x: event.clientX - previousMousePosition.x,
+          y: event.clientY - previousMousePosition.y
+        };
+        const sensitivity = 0.005;
+        cameraHolder.rotation.y -= deltaMove.x * sensitivity;
+        camera.rotation.x -= deltaMove.y * sensitivity;
+        inertia.pitch = deltaMove.y * sensitivity;
+        inertia.yaw   = deltaMove.x * sensitivity;
+        camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+        previousMousePosition = { x: event.clientX, y: event.clientY };
+      }
+    }
+
+    // Update renderer and camera on window resize.
+    function onWindowResize() {
+      let container = document.getElementById("viewer-container");
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / window.innerHeight;
+      } else {
+        renderer.setSize(window.innerWidth, window.innerHeight * 0.8);
+        camera.aspect = window.innerWidth / (window.innerHeight * 0.8);
+      }
+      camera.updateProjectionMatrix();
+    }
+
+    // Optional scroll zoom handler.
+    function onMouseWheel(event) {
+      camera.fov += event.deltaY * 0.05;
+      camera.fov = Math.max(fovMin, Math.min(fovMax, camera.fov));
+      camera.updateProjectionMatrix();
+    }
+
+    // Update the caption text.
+    function updateCaption() {
+      document.getElementById("caption").innerText = images[currentIndex].label;
+    }
+
+    // Load the current image into the viewer.
+    function loadCurrentImage() {
+      textureLoader.load(images[currentIndex].src, function (newTexture) {
+        material.map = newTexture;
+        material.needsUpdate = true;
+      });
+      updateCaption();
+    }
+
+    // Navigate to the next image.
+    function nextImage() {
+      currentIndex = (currentIndex + 1) % images.length;
+      loadCurrentImage();
+    }
+
+    // Navigate to the previous image.
+    function prevImage() {
+      currentIndex = (currentIndex - 1 + images.length) % images.length;
+      loadCurrentImage();
+    }
+
+    // Toggle full-screen mode.
+    function toggleFullScreen() {
+      const elem = document.getElementById("viewer-container");
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        elem.requestFullscreen?.() || elem.webkitRequestFullscreen?.();
+      } else {
+        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      }
+    }
+
+    // Start by loading images from the JSON.
+    window.onload = loadImages;
+  </script>
+</body>
+</html>
