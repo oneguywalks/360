@@ -23,6 +23,8 @@
       box-sizing: border-box;
       display: grid;
       grid-template-rows: auto 1fr;
+      position: relative;
+      z-index: 10; /* ensure home screen is on top when active */
     }
     /* Title at the top using Roboto Condensed Bold */
     #home-title {
@@ -69,18 +71,22 @@
       padding: 5px 0;
       font-size: 14px;
     }
-    /* Viewer container – fills the full viewport and uses flex to center content */
+    /* Viewer container – fills the viewport and centers its content */
     #viewer-container {
       display: none;
       background: black;
       width: 100vw;
-      height: 100vh; /* Fills the entire viewport */
-      position: relative;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
       overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
-      pointer-events: none; /* Disabled by default when hidden */
+      pointer-events: none; /* disabled when hidden */
+      visibility: hidden;
+      z-index: -9999; /* behind home screen when hidden */
     }
     /* Fullscreen mode for viewer container */
     #viewer-container:fullscreen,
@@ -232,12 +238,15 @@
     // Start the viewer with the selected image.
     function startViewer(index) {
       currentIndex = index;
-      // Hide the home screen and show the viewer container as a flex container.
+      // Hide the home screen.
       document.getElementById('home-screen').style.display = 'none';
+      // Show the viewer container and bring it to the front.
       let viewerContainer = document.getElementById('viewer-container');
       viewerContainer.style.display = 'flex';
       viewerContainer.style.pointerEvents = 'auto';
-      // Reset body background to black.
+      viewerContainer.style.visibility = 'visible';
+      viewerContainer.style.zIndex = '0';
+      // Set background to black.
       document.body.style.background = 'black';
       // Initialize or load the viewer.
       if (!viewerInitialized) {
@@ -249,7 +258,7 @@
       updateCaption();
     }
 
-    // Return to the home screen (gallery view) and exit fullscreen if active.
+    // Return to the home screen and exit fullscreen if active.
     function goToHomeScreen() {
       if (document.fullscreenElement || document.webkitFullscreenElement) {
         (document.exitFullscreen && document.exitFullscreen()) ||
@@ -258,6 +267,8 @@
       let viewerContainer = document.getElementById('viewer-container');
       viewerContainer.style.display = 'none';
       viewerContainer.style.pointerEvents = 'none';
+      viewerContainer.style.visibility = 'hidden';
+      viewerContainer.style.zIndex = '-9999';
       document.getElementById('home-screen').style.display = 'grid';
       document.body.style.background = 'white';
     }
@@ -340,18 +351,21 @@
       }
     }
 
+    // Helper to check if a target is inside a control element.
+    function isControlTarget(element) {
+      return element.closest('.controls') || element.closest('.arrow-button');
+    }
+
     // Touch event handlers.
     function onTouchStart(event) {
-      // Let button touches go through.
-      if (event.target.tagName === "BUTTON") return;
+      if (isControlTarget(event.target)) return;
       event.preventDefault();
       isDragging = true;
       let touch = event.touches[0];
       previousMousePosition = { x: touch.clientX, y: touch.clientY };
     }
     function onTouchMove(event) {
-      // Let button touches go through.
-      if (event.target.tagName === "BUTTON") return;
+      if (isControlTarget(event.target)) return;
       event.preventDefault();
       if (isDragging) {
         let touch = event.touches[0];
